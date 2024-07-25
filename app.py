@@ -18,19 +18,26 @@ def load_model():
 def load_scaler():
     return joblib.load('scaler.joblib')
 
+@st.cache_resource
+def load_scaler_y():
+    return joblib.load('scaler_y.joblib')  # Asegúrate de haber guardado este scaler
+
 @st.cache_data
 def load_data():
     return pd.read_csv("datos_casosRespiratorios.csv")
 
+
 model = load_model()
 scaler = load_scaler()
 data = load_data()
+scaler_y = load_scaler_y()
 
 # Función para crear predicciones
 def make_prediction(input_data):
     input_scaled = scaler.transform(input_data)
-    prediction = model.predict(input_scaled)
-    return prediction[0]
+    prediction_scaled = model.predict(input_scaled)
+    prediction = scaler_y.inverse_transform(prediction_scaled.reshape(-1, 1))
+    return prediction[0][0]
 
 # Función para mostrar gráficos
 def show_graphs():
@@ -102,12 +109,9 @@ def main():
     page = st.sidebar.radio("Ir a", ["Introducción", "Predicción", "Análisis de Datos"])
 
     if page == "Introducción":
-        st.image("caratula.png", 
-                caption="Sistema de predicción de casos sintomáticos de enfermedades respiratorias",
-                use_column_width=True)
-        
+
         st.write("""
-        ## Bienvenido a nuestra aplicación
+        # Bienvenido a nuestra aplicación
         
         Esta herramienta innovadora utiliza datos históricos sobre la contaminación del aire 
         para estimar el número de casos sintomáticos de enfermedades respiratorias en Ilo.
