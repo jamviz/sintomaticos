@@ -5,56 +5,58 @@ import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
-import os
-st.write(f"Directorio de trabajo actual: {os.getcwd()}")
+import logging
+import traceback
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 # Configuración de la página
 st.set_page_config(page_title="Predicción de Enfermedades Respiratorias en Ilo", layout="wide")
 
-# Carga de datos y modelos con manejo de errores
+# Función de carga segura
+def safe_load(loader_func, error_message):
+    try:
+        return loader_func()
+    except Exception as e:
+        logger.error(f"{error_message}: {str(e)}")
+        st.error(f"{error_message}. Consulta los logs para más detalles.")
+        return None
+        
+# Carga de datos y modelos
 @st.cache_resource
 def load_model():
-    try:
-        return joblib.load('linear_regression_model.joblib')
-    except FileNotFoundError:
-        st.error("No se pudo encontrar el archivo del modelo. Asegúrate de que 'linear_regression_model.joblib' esté en el directorio correcto.")
-        return None
+    return joblib.load('linear_regression_model.joblib')
 
 @st.cache_resource
 def load_scaler():
-    try:
-        return joblib.load('scaler.joblib')
-    except FileNotFoundError:
-        st.error("No se pudo encontrar el archivo del scaler. Asegúrate de que 'scaler.joblib' esté en el directorio correcto.")
-        return None
+    return joblib.load('scaler.joblib')
 
 @st.cache_resource
 def load_scaler_y():
-    try:
-        return joblib.load('scaler_y.joblib')
-    except FileNotFoundError:
-        st.error("No se pudo encontrar el archivo del scaler_y. Asegúrate de que 'scaler_y.joblib' esté en el directorio correcto.")
-        return None
+    return joblib.load('scaler_y.joblib')
 
 @st.cache_data
 def load_data():
-    try:
-        return pd.read_csv("datos_casosRespiratorios.csv")
-    except FileNotFoundError:
-        st.error("No se pudo encontrar el archivo de datos. Asegúrate de que 'datos_casosRespiratorios.csv' esté en el directorio correcto.")
-        return None
+    return pd.read_csv("datos_casosRespiratorios.csv")
 
-
-model = load_model()
-scaler = load_scaler()
-data = load_data()
-scaler_y = load_scaler_y()
+# Carga segura de recursos
+model = safe_load(load_model, "Error al cargar el modelo")
+scaler = safe_load(load_scaler, "Error al cargar el scaler")
+scaler_y = safe_load(load_scaler_y, "Error al cargar el scaler_y")
+data = safe_load(load_data, "Error al cargar los datos")
 
 # Función para crear predicciones
 def make_prediction(input_data):
-    input_scaled = scaler.transform(input_data)
-    prediction_scaled = model.predict(input_scaled)
-    prediction = scaler_y.inverse_transform(prediction_scaled.reshape(-1, 1))
-    return prediction[0][0]
+    try:
+        input_scaled = scaler.transform(input_data)
+        prediction_scaled = model.predict(input_scaled)
+        prediction = scaler_y.inverse_transform(prediction_scaled.reshape(-1, 1))
+        return prediction[0][0]
+    except Exception as e:
+        logger.error(f"Error en la predicción: {str(e)}")
+        st.error("Ocurrió un error durante la predicción. Consulta los logs para más detalles.")
+        return None
 
 # Verificación de recursos cargados
 if None in [model, scaler, data, scaler_y]:
@@ -63,24 +65,26 @@ if None in [model, scaler, data, scaler_y]:
     
 # Función para mostrar gráficos
 def show_graphs():
-    st.subheader("Visualización de Datos")
-
-    # Mapa de calor de correlación
-    st.write("Mapa de Calor de Correlación")
-    fig, ax = plt.subplots(figsize=(10, 8))
-    sns.heatmap(data.corr(), annot=True, cmap="BuPu", ax=ax)
-    st.pyplot(fig)
-
-    # Gráficos de dispersión
-    st.write("Gráficos de Dispersión")
-    fig, axes = plt.subplots(1, 3, figsize=(20, 6))
-    sns.scatterplot(x=data["Cantidad_Sintomaticos"], y=data["H2S_24h"], ax=axes[0])
-    axes[0].set_title('H2S vs Casos Sintomáticos')
-    sns.scatterplot(x=data["Cantidad_Sintomaticos"], y=data["SO2_24h"], ax=axes[1])
-    axes[1].set_title('SO2 vs Casos Sintomáticos')
-    sns.scatterplot(x=data["Cantidad_Sintomaticos"], y=data["CO"], ax=axes[2])
-    axes[2].set_title('CO vs Casos Sintomáticos')
-    st.pyplot(fig)
+    try:
+        st.subheader("Visualización de Datos")
+        
+        # Mapa de calor de correlación
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.heatmap(data.corr(), annot=True, cmap="BuPu", ax=ax)
+        st.pyplot(fig)
+        
+        # Gráficos de dispersión
+        fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+        sns.scatterplot(x=data["Cantidad_Sintomaticos"], y=data["H2S_24h"], ax=axes[0])
+        axes[0].set_title('H2S vs Casos Sintomáticos')
+        sns.scatterplot(x=data["Cantidad_Sintomaticos"], y=data["SO2_24h"], ax=axes[1])
+        axes[1].set_title('SO2 vs Casos Sintomáticos')
+        sns.scatterplot(x=data["Cantidad_Sintomaticos"], y=data["CO"], ax=axes[2])
+        axes[2].set_title('CO vs Casos Sintomáticos')
+        st.pyplot(fig)
+    except Exception as e:
+        logger.error(f"Error al mostrar gráficos: {str(e)}")
+        st.error("Ocurrió un error al mostrar los gráficos. Consulta los logs para más detalles.")
 
     # Explicación de los gráficos
     st.write("""
@@ -127,74 +131,82 @@ def show_graphs():
 
 # Interfaz de usuario
 def main():
-    st.sidebar.title("Navegación")
-    page = st.sidebar.radio("Ir a", ["Introducción", "Predicción", "Análisis de Datos"])
+    try:
+        st.sidebar.title("Navegación")
+        page = st.sidebar.radio("Ir a", ["Introducción", "Predicción", "Análisis de Datos"])
 
-    if page == "Introducción":
+        if page == "Introducción":
 
-        st.write("""
-        # Bienvenido a nuestra aplicación
-        
-        Esta herramienta innovadora utiliza datos históricos sobre la contaminación del aire 
-        para estimar el número de casos sintomáticos de enfermedades respiratorias en Ilo.
-        """)
-        
-        st.markdown("""
-        ### Navegación
-        
-        Utilice la barra lateral para explorar las diferentes secciones de la aplicación:
-        
-        - **Predicción**: Ingrese los niveles actuales de contaminantes para obtener una predicción.
-        - **Análisis de Datos**: Explore visualizaciones de los datos históricos y su interpretación.
-        """)
-        
-        st.markdown("""
-        ---
-        ### Créditos
-        
-        Este proyecto fue desarrollado por:
-        
-        - Jamir Balcona
-        - Carlos Mamani
-        - Ivan Ccaso
-        - Gabriela
-        
-        © 2024 Todos los derechos reservados
-        """)
-
-        st.warning("""
-        **Nota Importante**: Esta aplicación es solo para fines educativos y de demostración. 
-        No debe utilizarse como único recurso para tomar decisiones médicas o de salud pública.
-        """)
-    elif page == "Predicción":
-        st.title("Predicción de Casos Sintomáticos")
-        st.write("Ingrese los niveles actuales de contaminantes para obtener una predicción.")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("Formulario de Entrada")
-            h2s = st.number_input('H2S (24h)', min_value=0.0, max_value=100.0, value=10.0)
-            so2 = st.number_input('SO2 (24h)', min_value=0.0, max_value=100.0, value=20.0)
-            co = st.number_input('CO', min_value=0.0, max_value=1000.0, value=200.0)
-
-        with col2:
-            st.subheader("Ajuste Fino")
-            h2s = st.slider('H2S (24h)', 0.0, 100.0, h2s)
-            so2 = st.slider('SO2 (24h)', 0.0, 100.0, so2)
-            co = st.slider('CO', 0.0, 1000.0, co)
-
-        if st.button('Realizar Predicción'):
-            input_df = pd.DataFrame({'H2S_24h': [h2s], 'SO2_24h': [so2], 'CO': [co]})
-            prediction = make_prediction(input_df)
-            st.success(f'El número estimado de casos sintomáticos es: {prediction:.2f}')
-
-            # Mostrar gráficos después de la predicción
+            st.write("""
+            # Bienvenido a nuestra aplicación
+            
+            Esta herramienta innovadora utiliza datos históricos sobre la contaminación del aire 
+            para estimar el número de casos sintomáticos de enfermedades respiratorias en Ilo.
+            """)
+            
+            st.markdown("""
+            ### Navegación
+            
+            Utilice la barra lateral para explorar las diferentes secciones de la aplicación:
+            
+            - **Predicción**: Ingrese los niveles actuales de contaminantes para obtener una predicción.
+            - **Análisis de Datos**: Explore visualizaciones de los datos históricos y su interpretación.
+            """)
+            
+            st.markdown("""
+            ---
+            ### Créditos
+            
+            Este proyecto fue desarrollado por:
+            
+            - Jamir Balcona
+            - Carlos Mamani
+            - Ivan Ccaso
+            - Gabriela
+            
+            © 2024 Todos los derechos reservados
+            """)
+    
+            st.warning("""
+            **Nota Importante**: Esta aplicación es solo para fines educativos y de demostración. 
+            No debe utilizarse como único recurso para tomar decisiones médicas o de salud pública.
+            """)
+        elif page == "Predicción":
+            st.title("Predicción de Casos Sintomáticos")
+            st.write("Ingrese los niveles actuales de contaminantes para obtener una predicción.")
+    
+            col1, col2 = st.columns(2)
+    
+            with col1:
+                st.subheader("Formulario de Entrada")
+                h2s = st.number_input('H2S (24h)', min_value=0.0, max_value=100.0, value=10.0)
+                so2 = st.number_input('SO2 (24h)', min_value=0.0, max_value=100.0, value=20.0)
+                co = st.number_input('CO', min_value=0.0, max_value=1000.0, value=200.0)
+    
+            with col2:
+                st.subheader("Ajuste Fino")
+                h2s = st.slider('H2S (24h)', 0.0, 100.0, h2s)
+                so2 = st.slider('SO2 (24h)', 0.0, 100.0, so2)
+                co = st.slider('CO', 0.0, 1000.0, co)
+    
+            if st.button('Realizar Predicción'):
+                input_df = pd.DataFrame({'H2S_24h': [h2s], 'SO2_24h': [so2], 'CO': [co]})
+                prediction = make_prediction(input_df)
+                st.success(f'El número estimado de casos sintomáticos es: {prediction:.2f}')
+    
+                # Mostrar gráficos después de la predicción
+                show_graphs()
+    
+        elif page == "Análisis de Datos":
+            st.title("Análisis de Datos Históricos")
             show_graphs()
 
-    elif page == "Análisis de Datos":
-        st.title("Análisis de Datos Históricos")
-        show_graphs()
-
+    except Exception as e:
+        logger.error(f"Error en la función main: {str(e)}\n{traceback.format_exc()}")
+        st.error("Ocurrió un error inesperado. Por favor, consulta los logs para más detalles.")
 if __name__ == "__main__":
-    main()
+ try:
+        main()
+    except Exception as e:
+        logger.error(f"Error no manejado: {str(e)}\n{traceback.format_exc()}")
+        st.error("La aplicación encontró un error inesperado. Los detalles se han registrado para su análisis.")
