@@ -5,26 +5,43 @@ import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
-
+import os
+st.write(f"Directorio de trabajo actual: {os.getcwd()}")
 # Configuración de la página
 st.set_page_config(page_title="Predicción de Enfermedades Respiratorias en Ilo", layout="wide")
 
-# Carga de datos y modelos
+# Carga de datos y modelos con manejo de errores
 @st.cache_resource
 def load_model():
-    return joblib.load('linear_regression_model.joblib')
+    try:
+        return joblib.load('linear_regression_model.joblib')
+    except FileNotFoundError:
+        st.error("No se pudo encontrar el archivo del modelo. Asegúrate de que 'linear_regression_model.joblib' esté en el directorio correcto.")
+        return None
 
 @st.cache_resource
 def load_scaler():
-    return joblib.load('scaler.joblib')
+    try:
+        return joblib.load('scaler.joblib')
+    except FileNotFoundError:
+        st.error("No se pudo encontrar el archivo del scaler. Asegúrate de que 'scaler.joblib' esté en el directorio correcto.")
+        return None
 
 @st.cache_resource
 def load_scaler_y():
-    return joblib.load('scaler_y.joblib')  # Asegúrate de haber guardado este scaler
+    try:
+        return joblib.load('scaler_y.joblib')
+    except FileNotFoundError:
+        st.error("No se pudo encontrar el archivo del scaler_y. Asegúrate de que 'scaler_y.joblib' esté en el directorio correcto.")
+        return None
 
 @st.cache_data
 def load_data():
-    return pd.read_csv("datos_casosRespiratorios.csv")
+    try:
+        return pd.read_csv("datos_casosRespiratorios.csv")
+    except FileNotFoundError:
+        st.error("No se pudo encontrar el archivo de datos. Asegúrate de que 'datos_casosRespiratorios.csv' esté en el directorio correcto.")
+        return None
 
 
 model = load_model()
@@ -39,6 +56,11 @@ def make_prediction(input_data):
     prediction = scaler_y.inverse_transform(prediction_scaled.reshape(-1, 1))
     return prediction[0][0]
 
+# Verificación de recursos cargados
+if None in [model, scaler, data, scaler_y]:
+    st.error("No se pudieron cargar todos los recursos necesarios. Por favor, verifica los archivos y reinicia la aplicación.")
+    st.stop()
+    
 # Función para mostrar gráficos
 def show_graphs():
     st.subheader("Visualización de Datos")
